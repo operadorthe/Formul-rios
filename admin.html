@@ -1,0 +1,94 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><link rel="icon" href="assets/flor.png"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Figtree:wght@400;500;600&display=swap"><link rel="stylesheet" href="assets/estilo.css"><title>A Estação – Área da liderança</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script></head><body>
+<section class="hero login" id="login"><form class="card" id="lg"><img src="assets/logo-horizontal.png" alt="A Estação" width="200"><h1>Área da liderança</h1><p class="mu">Entre para ver as respostas e ajustar os formulários.</p>
+<div class="f"><label class="q" for="em">E-mail</label><input id="em" type="email" autocomplete="username" required></div>
+<div class="f"><label class="q" for="pw">Senha</label><input id="pw" type="password" autocomplete="current-password" required></div>
+<button class="btn">Entrar</button><p class="msg" id="le" role="alert"></p></form></section>
+<div id="shell" hidden><header class="top"><img src="assets/logo-horizontal.png" alt="A Estação" height="30"><nav><button data-t="painel">Painel</button><button data-t="caixa">Caixa de entrada</button><button data-t="editor">Formulários</button></nav><button class="btn sec sm" id="sair">Sair</button></header><main class="main" id="main"></main></div>
+<aside class="dr" id="dr" hidden></aside>
+<script src="config.js"></script>
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const dd=s=>/^\d{4}-\d\d-\d\d/.test(s||"")?s.slice(8,10)+"/"+s.slice(5,7)+"/"+s.slice(0,4):(s||"");
+const N=n=>(+n||0).toLocaleString("pt-BR"),val=v=>Array.isArray(v)?v.join(", "):(v??"");
+const fdt=d=>new Date(d).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"});
+const FS={"relatorio-culto":["Novo","Conferido"],acolhe:["Novo","Contatado"]},PC={"relatorio-culto":["data","dia","ministro","adultos","criancas"],acolhe:["data","nome","telefone","desejo"]};
+const TP={text:"Texto curto",textarea:"Texto longo",number:"Número",date:"Data",time:"Hora",tel:"Telefone",yesno:"Sim ou não",select:"Lista suspensa",radio:"Escolha única",multi:"Várias escolhas"},OPT=["select","radio","multi"];
+const stl=r=>(FS[r.form_slug]||["Novo","Concluído"])[r.status=="novo"?0:1],badge=r=>'<span class="bd'+(r.status=="novo"?"":" fe")+'">'+stl(r)+"</span>";
+let sb,forms=[],resp=[],tab="painel",cx={slug:"acolhe",q:"",st:"",de:"",ate:""},ed=null,per=90;
+if(/SEU-PROJETO/.test(CFG.url))$("#le").textContent="Falta preencher o arquivo config.js com os dados do Supabase.";
+else{sb=supabase.createClient(CFG.url,CFG.key);sb.auth.getSession().then(({data})=>data.session&&entrar())}
+$("#lg").onsubmit=async e=>{e.preventDefault();if(!sb)return;const{error}=await sb.auth.signInWithPassword({email:$("#em").value.trim(),password:$("#pw").value});
+ if(error)$("#le").textContent="E-mail ou senha incorretos.";else entrar()};
+$("#sair").onclick=async()=>{await sb.auth.signOut();location.reload()};
+async function entrar(){$("#login").hidden=true;$("#shell").hidden=false;await carregar();mostrar()}
+async function carregar(){const[a,b]=await Promise.all([sb.from("forms").select("*").order("title"),sb.from("responses").select("*").order("created_at",{ascending:false}).range(0,4999)]);forms=a.data||[];resp=b.data||[]}
+$$("nav button").forEach(b=>b.onclick=()=>{tab=b.dataset.t;mostrar()});
+function mostrar(){fechar();$$("nav button").forEach(b=>b.classList.toggle("on",b.dataset.t==tab));({painel,caixa,editor})[tab]()}
+function painel(){
+ const lim=per?Date.now()-per*864e5:0,dt=r=>r.data.data||r.created_at.slice(0,10),ok=r=>new Date(dt(r)).getTime()>=lim;
+ const cu=resp.filter(r=>r.form_slug=="relatorio-culto"&&ok(r)),ac=resp.filter(r=>r.form_slug=="acolhe"&&ok(r));
+ const S=k=>cu.reduce((s,r)=>s+(+r.data[k]||0),0),pres=r=>(+r.data.adultos||0)+(+r.data.criancas||0),K=(n,t)=>'<div class="kpi"><span class="num">'+N(n)+"</span><small>"+t+"</small></div>";
+ const ult=cu.slice().sort((a,b)=>dt(a)<dt(b)?-1:1).slice(-12),mx=Math.max(1,...ult.map(pres)),por={},des={};
+ cu.forEach(r=>{const d=(r.data.dia||"Outro").split(" - ")[0];(por[d]??=[]).push(pres(r))});
+ ac.forEach(r=>[].concat(r.data.desejo||[]).forEach(x=>des[x]=(des[x]||0)+1));
+ const med=Object.entries(por).map(([k,v])=>[k,Math.round(v.reduce((a,b)=>a+b)/v.length)]).sort((a,b)=>b[1]-a[1]);
+ const HB=rows=>{const m=Math.max(1,...rows.map(x=>x[1]));return rows.length?rows.map(([k,v])=>'<div class="hb"><span>'+esc(k)+'</span><b style="width:'+Math.max(4,v/m*100)+'%"></b><em>'+N(v)+"</em></div>").join(""):'<p class="mu">Ainda não há respostas neste período.</p>'};
+ const bars=ult.length?ult.map(r=>{const a=+r.data.adultos||0,c=+r.data.criancas||0;return '<div class="col" title="'+dd(dt(r))+": "+a+" adultos, "+c+' crianças"><small>'+N(a+c)+'</small><i class="c" style="height:'+c/mx*150+'px"></i><i class="a" style="height:'+a/mx*150+'px"></i><small>'+dd(dt(r)).slice(0,5)+"</small></div>"}).join(""):'<p class="mu">Ainda não há respostas neste período.</p>';
+ $("#main").innerHTML='<div class="bar"><h1>Painel</h1><select id="per" aria-label="Período">'+[[30,"Últimos 30 dias"],[90,"Últimos 90 dias"],[365,"Último ano"],[0,"Todo o período"]].map(([v,t])=>'<option value="'+v+'"'+(v==per?" selected":"")+">"+t+"</option>").join("")+"</select></div>"
+ +"<h2>Cultos</h2><div class='kpis'>"+K(cu.length,"cultos registrados")+K(S("adultos")+S("criancas"),"pessoas somando adultos e crianças")+K(S("visitantes"),"visitantes nos cultos")+K(S("nascimento"),"novos nascimentos")+K(S("espirito"),"batismos no Espírito Santo")+K(S("cura"),"orações por cura")+"</div>"
+ +'<div class="g2c"><section class="card"><h3>Presença nos últimos cultos</h3><p class="lg"><i class="a"></i>Adultos<i class="c"></i>Crianças</p><div class="bars">'+bars+'</div></section><section class="card"><h3>Média de presença por dia</h3>'+HB(med)+"</section></div>"
+ +"<h2>Acolhe</h2><div class='kpis'>"+K(ac.length,"fichas de visitantes")+K(ac.filter(r=>r.data.entregou=="Sim").length,"se entregaram a Jesus")+K(ac.filter(r=>r.data.visitando=="Sim").length,"estão apenas visitando")+K(ac.filter(r=>r.status=="novo").length,"aguardando contato")+'</div><section class="card" style="margin-top:14px"><h3>Como querem ser procurados</h3>'+HB(Object.entries(des).sort((a,b)=>b[1]-a[1]))+"</section>";
+ $("#per").onchange=e=>{per=+e.target.value;painel()}}
+function filtrar(){const q=cx.q.toLowerCase();return resp.filter(r=>r.form_slug==cx.slug&&(!cx.st||r.status==cx.st)&&(!cx.de||r.created_at.slice(0,10)>=cx.de)&&(!cx.ate||r.created_at.slice(0,10)<=cx.ate)&&(!q||JSON.stringify(Object.values(r.data)).toLowerCase().includes(q)))}
+const pills=(sel)=>'<div class="pills">'+forms.map(f=>'<button class="pill'+(f.slug==sel?" on":"")+'" data-s="'+f.slug+'">'+esc(f.title)+"</button>").join("")+"</div>";
+function caixa(){if(!forms.some(f=>f.slug==cx.slug)&&forms[0])cx.slug=forms[0].slug;
+ $("#main").innerHTML='<div class="bar"><h1>Caixa de entrada</h1><button class="btn sec sm" id="csv">Exportar CSV</button></div>'+pills(cx.slug)
+ +'<div class="filtros"><input id="q" type="search" placeholder="Buscar nas respostas" aria-label="Buscar nas respostas" value="'+esc(cx.q)+'"><select id="st" aria-label="Situação"><option value="">Todas as situações</option><option value="novo"'+(cx.st=="novo"?" selected":"")+'>Novas</option><option value="feito"'+(cx.st=="feito"?" selected":"")+'>Concluídas</option></select><label>De <input id="de" type="date" value="'+cx.de+'"></label><label>Até <input id="ate" type="date" value="'+cx.ate+'"></label></div><div id="lst"></div>';
+ [["q","q"],["st","st"],["de","de"],["ate","ate"]].forEach(([i,k])=>$("#"+i).oninput=e=>{cx[k]=e.target.value;lista()});
+ $("#csv").onclick=csv;lista()}
+function lista(){const f=forms.find(x=>x.slug==cx.slug);if(!f)return;const rs=filtrar();
+ let cols=(PC[f.slug]||[]).map(i=>f.fields.find(x=>x.id==i)).filter(Boolean);if(!cols.length)cols=f.fields.slice(0,4);
+ $("#lst").innerHTML=rs.length?'<div class="tw"><table class="tb"><thead><tr><th>Recebida em</th>'+cols.map(c=>"<th>"+esc(c.label)+"</th>").join("")+"<th>Situação</th></tr></thead><tbody>"+rs.map(r=>'<tr tabindex="0" data-id="'+r.id+'"><td>'+fdt(r.created_at)+"</td>"+cols.map(c=>"<td>"+esc(c.type=="date"?dd(r.data[c.id]):val(r.data[c.id]))+"</td>").join("")+"<td>"+badge(r)+"</td></tr>").join("")+'</tbody></table></div><p class="mu" style="margin-top:10px">'+N(rs.length)+" resposta(s)</p>"
+ :'<div class="vazio"><img src="assets/flor.png" alt="" width="64"><p>Nenhuma resposta por aqui ainda.</p></div>';
+ $$("#lst tr[data-id]").forEach(tr=>{tr.onclick=()=>abrir(tr.dataset.id);tr.onkeydown=e=>e.key=="Enter"&&abrir(tr.dataset.id)})}
+const lab=(f,r,i)=>(f.fields.find(x=>x.id==i)||{}).label||r.labels[i]||i;
+function abrir(id){const r=resp.find(x=>x.id==id),f=forms.find(x=>x.slug==r.form_slug),L=FS[f.slug]||["Novo","Concluído"];
+ const ids=[...new Set([...f.fields.map(x=>x.id),...Object.keys(r.data)])].filter(i=>i in r.data);
+ $("#dr").innerHTML='<button class="btn sec sm" id="fx">Fechar</button><h2>'+fdt(r.created_at)+"</h2><p>"+badge(r)+"</p><dl>"+ids.map(i=>{const t=(f.fields.find(x=>x.id==i)||{}).type,v=t=="date"?dd(r.data[i]):val(r.data[i]);return "<dt>"+esc(lab(f,r,i))+"</dt><dd>"+(esc(v)||"—")+"</dd>"}).join("")+'</dl><div class="acts"><button class="btn" id="tg">'+(r.status=="novo"?"Marcar como "+L[1].toLowerCase():"Voltar para "+L[0].toLowerCase())+'</button><button class="btn sec" id="rm">Excluir</button></div>';
+ $("#dr").hidden=false;$("#fx").onclick=fechar;
+ $("#tg").onclick=async()=>{const s=r.status=="novo"?"feito":"novo",{error}=await sb.from("responses").update({status:s}).eq("id",r.id);if(error)return alert("Não foi possível atualizar. Entre de novo e tente outra vez.");r.status=s;abrir(id);lista()};
+ $("#rm").onclick=async()=>{if(!confirm("Excluir esta resposta? Não dá para desfazer."))return;const{error}=await sb.from("responses").delete().eq("id",r.id);if(error)return alert("Não foi possível excluir.");resp=resp.filter(x=>x!==r);fechar();lista()}}
+function fechar(){$("#dr").hidden=true}document.addEventListener("keydown",e=>e.key=="Escape"&&fechar());
+function csv(){const f=forms.find(x=>x.slug==cx.slug),rs=filtrar(),ids=[...new Set([...f.fields.map(x=>x.id),...rs.flatMap(r=>Object.keys(r.data))])];
+ const q=v=>'"'+String(v??"").replace(/"/g,'""')+'"',lb=i=>(f.fields.find(x=>x.id==i)||{}).label||(rs.find(r=>r.labels[i])||{labels:{}}).labels[i]||i;
+ const rows=[["Recebida em","Situação",...ids.map(lb)],...rs.map(r=>[fdt(r.created_at),stl(r),...ids.map(i=>val(r.data[i]))])];
+ const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\ufeff"+rows.map(r=>r.map(q).join(";")).join("\r\n")],{type:"text/csv;charset=utf-8"}));a.download=f.slug+"-"+new Date().toISOString().slice(0,10)+".csv";a.click()}
+function editor(slug){const f=forms.find(x=>x.slug==(slug||ed?.slug))||forms[0];
+ if(!f)return $("#main").innerHTML='<p class="mu">Nenhum formulário encontrado. Rode o arquivo schema.sql no Supabase.</p>';
+ ed=structuredClone(f);const link=new URL("index.html?f="+ed.slug,location.href).href;
+ $("#main").innerHTML='<div class="bar"><h1>Formulários</h1><button class="btn" id="sv">Salvar alterações</button></div>'+pills(ed.slug)
+ +'<section class="card"><div class="f"><label class="q" for="t">Título</label><input id="t" data-h="title" value="'+esc(ed.title)+'"></div><div class="f"><label class="q" for="s">Texto de apresentação</label><input id="s" data-h="subtitle" value="'+esc(ed.subtitle)+'"></div><div class="f"><label class="q" for="o">Mensagem depois do envio</label><input id="o" data-h="success" value="'+esc(ed.success)+'"></div><p class="mu">Link para compartilhar: <a href="'+esc(link)+'" target="_blank" rel="noopener">'+esc(link)+'</a></p></section><h2>Perguntas</h2><div id="fl"></div><button class="btn sec" id="ad">Adicionar pergunta</button><p class="msg" id="info" role="status"></p>';fl()}
+const row=(f,i)=>'<div class="fr" data-i="'+i+'"><div class="g2"><input data-k="label" value="'+esc(f.label)+'" aria-label="Texto da pergunta" placeholder="Texto da pergunta"><select data-k="type" aria-label="Tipo de resposta">'+Object.entries(TP).map(([k,v])=>'<option value="'+k+'"'+(k==f.type?" selected":"")+">"+v+"</option>").join("")+"</select></div>"
+ +(OPT.includes(f.type)?'<textarea data-k="options" rows="4" aria-label="Opções, uma por linha" placeholder="Uma opção por linha">'+esc((f.options||[]).join("\n"))+"</textarea>":"")
+ +'<div class="acts"><label class="ck"><input type="checkbox" data-k="required"'+(f.required?" checked":"")+"> Resposta obrigatória</label><span><button class=\"btn sec sm\" data-a=\"up\""+(i?"":" disabled")+'>Subir</button> <button class="btn sec sm" data-a="dn"'+(i<ed.fields.length-1?"":" disabled")+'>Descer</button> <button class="btn sec sm" data-a="rm">Remover</button></span></div></div>';
+function fl(){$("#fl").innerHTML=ed.fields.map(row).join("")}
+function info(t,bad){const e=$("#info");e.textContent=t;e.className="msg"+(bad?"":" ok")}
+$("#main").addEventListener("input",e=>{const t=e.target;if(tab!="editor"||!ed)return;if(t.dataset.h){ed[t.dataset.h]=t.value;return}
+ const r=t.closest(".fr");if(!r||!t.dataset.k)return;const f=ed.fields[+r.dataset.i],k=t.dataset.k;
+ if(k=="required")f.required=t.checked;else if(k=="options")f.options=t.value.split("\n").map(x=>x.trim()).filter(Boolean);
+ else if(k=="type"){f.type=t.value;if(OPT.includes(t.value)&&!(f.options||[]).length)f.options=["Opção 1","Opção 2"];fl()}else f[k]=t.value});
+$("#main").addEventListener("click",async e=>{const b=e.target.closest("button");if(!b)return;
+ if(b.dataset.s){if(tab=="caixa"){cx.slug=b.dataset.s;caixa()}else editor(b.dataset.s);return}
+ if(tab!="editor")return;
+ if(b.dataset.a){const i=+b.closest(".fr").dataset.i,a=ed.fields;
+  if(b.dataset.a=="rm"){if(confirm("Remover esta pergunta? As respostas já recebidas continuam na caixa de entrada."))a.splice(i,1)}
+  else{const j=b.dataset.a=="up"?i-1:i+1;[a[i],a[j]]=[a[j],a[i]]}fl();return}
+ if(b.id=="ad"){ed.fields.push({id:"c"+Date.now().toString(36),label:"",type:"text",required:false});fl();const l=$$("#fl [data-k=label]");l[l.length-1].focus();return}
+ if(b.id=="sv"){if(ed.fields.some(f=>!f.label.trim()))return info("Toda pergunta precisa de um texto.",1);
+  if(ed.fields.some(f=>OPT.includes(f.type)&&!(f.options||[]).length))return info("Escreva ao menos uma opção nas perguntas de escolha.",1);
+  const fields=ed.fields.map(f=>({...f,label:f.label.trim()})),{error}=await sb.from("forms").update({title:ed.title,subtitle:ed.subtitle,success:ed.success,fields,updated_at:new Date().toISOString()}).eq("slug",ed.slug);
+  if(error)return info("Não foi possível salvar. Entre de novo e tente outra vez.",1);
+  ed.fields=fields;forms[forms.findIndex(x=>x.slug==ed.slug)]=structuredClone(ed);info("Alterações salvas. O formulário público já está atualizado.")}});
+</script></body></html>

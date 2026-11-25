@@ -1,0 +1,45 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><link rel="icon" href="assets/flor.png"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Figtree:wght@400;500;600&display=swap"><link rel="stylesheet" href="assets/estilo.css"><title>A Estação – Formulários</title></head><body>
+<header class="hero"><img src="assets/logo-vertical.png" alt="A Estação" width="250"></header>
+<main class="wrap"><section class="card" id="app" aria-live="polite"><p class="mu">Carregando…</p></section>
+<p class="pe">Verbo da Vida – Marcolândia – PI &nbsp;|&nbsp; <a href="admin.html">Área da liderança</a></p></main>
+<script src="config.js"></script>
+<script>
+(async()=>{
+const {url,key}=CFG,H={apikey:key,Authorization:"Bearer "+key,"Content-Type":"application/json"},app=document.getElementById("app");
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const slug=new URLSearchParams(location.search).get("f");
+const hoje=()=>new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);
+const api=async(p,o={})=>{const r=await fetch(url+"/rest/v1/"+p,{headers:H,...o});if(!r.ok)throw new Error(r.status);return r.status==204?null:r.json()};
+if(/SEU-PROJETO/.test(url)){app.innerHTML="<h1>Falta um passo</h1><p class='mu'>Preencha o arquivo config.js com os dados do Supabase.</p>";return}
+const TYPES={text:"text",number:"number",date:"date",time:"time",tel:"tel"};
+function campo(f){const id="f_"+f.id,rq=f.required?" required":"",o=f.options||[],grp=["yesno","radio","multi"].includes(f.type);let c;
+ if(f.type=="textarea")c='<textarea id="'+id+'" name="'+f.id+'" rows="3"'+rq+'></textarea>';
+ else if(f.type=="select")c='<select id="'+id+'" name="'+f.id+'"'+rq+'><option value="">Selecione</option>'+o.map(x=>"<option>"+esc(x)+"</option>").join("")+"</select>";
+ else if(grp){const op=f.type=="yesno"?["Sim","Não"]:o,t=f.type=="multi"?"checkbox":"radio";
+  c='<div class="op">'+op.map(x=>'<label><input type="'+t+'" name="'+f.id+'" value="'+esc(x)+'"'+(f.required&&t=="radio"?" required":"")+"><span>"+esc(x)+"</span></label>").join("")+"</div>"}
+ else c='<input id="'+id+'" name="'+f.id+'" type="'+(TYPES[f.type]||"text")+'"'+(f.type=="number"?' min="0" inputmode="numeric"':"")+(f.type=="date"?' value="'+hoje()+'"':"")+(f.type=="tel"?' inputmode="tel" autocomplete="tel"':"")+rq+">";
+ const lb=esc(f.label)+(f.required?' <b aria-hidden="true">*</b>':"");
+ return '<div class="f">'+(grp?'<div class="q" role="group">'+lb+"</div>":'<label class="q" for="'+id+'">'+lb+"</label>")+c+"</div>"}
+try{
+ if(!slug){const l=await api("forms?select=slug,title,subtitle&order=title");
+  app.innerHTML="<h1>Escolha o formulário</h1><p class='mu'>Toque no formulário que você quer preencher.</p><div class='lista'>"+l.map(f=>'<a class="item" href="?f='+encodeURIComponent(f.slug)+'"><strong>'+esc(f.title)+"</strong><span>"+esc(f.subtitle)+"</span></a>").join("")+"</div>";return}
+ const [f]=await api("forms?slug=eq."+encodeURIComponent(slug)+"&select=*");
+ if(!f){app.innerHTML="<h1>Formulário não encontrado</h1><p class='mu'>Confira o link ou peça um novo à liderança.</p>";return}
+ document.title=f.title+" – A Estação";
+ app.innerHTML="<h1>"+esc(f.title)+"</h1><p class='mu' style='margin-bottom:26px'>"+esc(f.subtitle)+'</p><form id="fm" novalidate>'+f.fields.map(campo).join("")+'<input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true"><button class="btn" id="bt">Enviar</button><p class="msg" id="er" role="alert"></p></form>';
+ const fm=document.getElementById("fm"),er=document.getElementById("er"),bt=document.getElementById("bt");
+ fm.onsubmit=async e=>{e.preventDefault();er.textContent="";if(fm.website.value)return;
+  if(!fm.checkValidity()){fm.reportValidity();return}
+  const data={},labels={};
+  for(const q of f.fields){const els=[...fm.querySelectorAll('[name="'+q.id+'"]')];let v;
+   if(q.type=="multi"){v=els.filter(x=>x.checked).map(x=>x.value);if(q.required&&!v.length){er.textContent="Escolha ao menos uma opção em “"+q.label+"”.";return}}
+   else if(q.type=="yesno"||q.type=="radio")v=(els.find(x=>x.checked)||{}).value||"";
+   else{v=els[0].value.trim();if(q.type=="number"&&v!=="")v=Number(v)}
+   data[q.id]=v;labels[q.id]=q.label}
+  bt.disabled=true;bt.textContent="Enviando…";
+  try{await api("responses",{method:"POST",headers:{...H,Prefer:"return=minimal"},body:JSON.stringify({form_slug:f.slug,data,labels})});
+   app.innerHTML='<div class="ok"><img src="assets/flor.png" alt=""><h1>Recebido!</h1><p>'+esc(f.success)+'</p><button class="btn" onclick="location.reload()">Enviar outro</button></div>'}
+  catch{er.textContent="Não foi possível enviar agora. Confira a internet e tente de novo.";bt.disabled=false;bt.textContent="Enviar"}}
+}catch{app.innerHTML="<h1>Não conseguimos abrir agora</h1><p class='mu'>Confira sua internet e atualize a página.</p>"}
+})();
+</script></body></html>
