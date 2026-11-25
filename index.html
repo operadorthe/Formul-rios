@@ -77,7 +77,7 @@ const {url,key}=CFG,H={apikey:key,"Content-Type":"application/json",...(key.star
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const slug=new URLSearchParams(location.search).get("f");
 const hoje=()=>new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);
-const api=async(p,o={})=>{const r=await fetch(url+"/rest/v1/"+p,{headers:H,...o});if(!r.ok)throw new Error(r.status);return r.status==204?null:r.json()};
+const api=async(p,o={})=>{const r=await fetch(url+"/rest/v1/"+p,{headers:H,...o});if(!r.ok)throw new Error(r.status);const t=await r.text();return t?JSON.parse(t):null};
 if(/SEU-PROJETO/.test(url)){app.innerHTML="<h1>Falta um passo</h1><p class='mu'>Preencha o arquivo config.js com os dados do Supabase.</p>";return}
 const TYPES={text:"text",number:"number",date:"date",time:"time",tel:"tel"};
 function campo(f){const id="f_"+f.id,rq=f.required?" required":"",o=f.options||[],grp=["yesno","radio","multi"].includes(f.type);let c;
